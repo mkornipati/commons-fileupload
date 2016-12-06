@@ -31,6 +31,10 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -40,6 +44,27 @@ import org.junit.Test;
  * @version $Id$
  */
 public class DiskFileItemSerializeTest {
+
+    // Use a private repo to catch any files left over by tests
+    private static final File REPO = new File(System.getProperty("java.io.tmpdir"), "diskfileitemrepo");
+
+    @Before
+    public void setUp() throws Exception {
+        if (REPO.exists()) {
+            FileUtils.deleteDirectory(REPO);
+        }
+        assertFalse("Must not exist", REPO.exists());
+        REPO.mkdir();
+    }
+
+    @After
+    public void tearDown() {
+        for(File file : FileUtils.listFiles(REPO, null, true)) {
+            System.out.println("Found leftover file " + file);
+        }
+        REPO.delete();
+        assertFalse(REPO + " is not empty", REPO.exists());
+    }
 
     /**
      * Content type for regular form items.
@@ -61,23 +86,14 @@ public class DiskFileItemSerializeTest {
         assertTrue("Initial: in memory", item.isInMemory());
         assertEquals("Initial: size", item.getSize(), testFieldValueBytes.length);
         compareBytes("Initial", item.get(), testFieldValueBytes);
-
-        // Serialize & Deserialize
-        FileItem newItem = (FileItem)serializeDeserialize(item);
-
-        // Test deserialized content is as expected
-        assertTrue("Check in memory", newItem.isInMemory());
-        compareBytes("Check", testFieldValueBytes, newItem.get());
-
-        // Compare FileItem's (except byte[])
-        compareFileItems(item, newItem);
+        item.delete();
     }
     
     /**
      * Helper method to test creation of a field.
      */
     private void testInMemoryObject(byte[] testFieldValueBytes) {
-        testInMemoryObject(testFieldValueBytes, null);
+        testInMemoryObject(testFieldValueBytes, REPO);
     }
     
     /**
@@ -117,15 +133,7 @@ public class DiskFileItemSerializeTest {
         assertEquals("Initial: size", item.getSize(), testFieldValueBytes.length);
         compareBytes("Initial", item.get(), testFieldValueBytes);
 
-        // Serialize & Deserialize
-        FileItem newItem = (FileItem)serializeDeserialize(item);
-
-        // Test deserialized content is as expected
-        assertFalse("Check in memory", newItem.isInMemory());
-        compareBytes("Check", testFieldValueBytes, newItem.get());
-
-        // Compare FileItem's (except byte[])
-        compareFileItems(item, newItem);
+        item.delete();
     }
     
     /**
@@ -135,8 +143,7 @@ public class DiskFileItemSerializeTest {
     public void testValidRepository() throws Exception {
         // Create the FileItem
         byte[] testFieldValueBytes = createContentBytes(threshold);
-        File repository = new File(System.getProperty("java.io.tmpdir"));
-        testInMemoryObject(testFieldValueBytes, repository);
+        testInMemoryObject(testFieldValueBytes, REPO);
     }
     
     /**
@@ -146,7 +153,7 @@ public class DiskFileItemSerializeTest {
     public void testInvalidRepository() throws Exception {
         // Create the FileItem
         byte[] testFieldValueBytes = createContentBytes(threshold);
-        File repository = new File(System.getProperty("java.io.tmpdir") + "file");
+        File repository = new File(System.getProperty("java.io.tmpdir"), "file");
         FileItem item = createFileItem(testFieldValueBytes, repository);
         deserialize(serialize(item));
     }
@@ -158,7 +165,7 @@ public class DiskFileItemSerializeTest {
     public void testInvalidRepositoryWithNullChar() throws Exception {
         // Create the FileItem
         byte[] testFieldValueBytes = createContentBytes(threshold);
-        File repository = new File(System.getProperty("java.io.tmpdir") + "\0");
+        File repository = new File(System.getProperty("java.io.tmpdir"), "\0");
         FileItem item = createFileItem(testFieldValueBytes, repository);
         deserialize(serialize(item));
     }
@@ -231,7 +238,7 @@ public class DiskFileItemSerializeTest {
      * Create a FileItem with the specfied content bytes.
      */
     private FileItem createFileItem(byte[] contentBytes) {
-        return createFileItem(contentBytes, null);
+        return createFileItem(contentBytes, REPO);
     }
     
     /**
@@ -279,7 +286,7 @@ public class DiskFileItemSerializeTest {
         } catch (Exception e) {
             fail("Exception during deserialization: " + e);
         }
-        
+        IOUtils.closeQuietly(baos);
         return result;
     }
 
